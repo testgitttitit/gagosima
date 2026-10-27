@@ -93,7 +93,7 @@ a.go:focus-visible, button:focus-visible { outline: 2px solid var(--accent); out
   <p class="foot">
     '구글맵' 버튼을 누르면 구글맵 앱의 해당 장소로 넘어가요. 길찾기는 거기서 하면 돼요.<br>
     '내 위치'를 켜면 맛집 탭이 가까운 순으로 정렬돼요. 위치는 이 화면에서만 쓰이고 어디에도 저장·전송되지 않아요.<br>
-    지도 © OpenStreetMap contributors © CARTO · 도로 경로·시간 OSRM 추정(실제는 20~30% 더 걸림) · 2일차 오후는 페리 대신 육로로 계산돼 실제보다 길게 나와요.<br>
+    지도 © OpenStreetMap contributors · 도로 경로·시간 OSRM 추정(실제는 20~30% 더 걸림) · 2일차 오후는 페리 대신 육로로 계산돼 실제보다 길게 나와요.<br>
     맛집 출처: 타베로그 백명점·정리글, 구글 리뷰 순위(2024), 구글맵 '宮崎市: トレンド' 리스트. 영업시간·휴무는 가기 전에 확인하세요.
   </p>
 </div>
@@ -113,8 +113,9 @@ let me = null, watchId = null, meMarker = null;
 
 const map = L.map("map", { zoomControl: false, attributionControl: true });
 L.control.zoom({ position: "topright" }).addTo(map);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-  maxZoom: 19, subdomains: "abcd", attribution: "© OpenStreetMap contributors © CARTO"
+// CARTO 타일은 API 키가 필요해져서 OSM 기본 타일 사용 (https 페이지에서만 표시, 로컬 파일로 열면 차단될 수 있음)
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
 }).addTo(map);
 const layer = L.layerGroup().addTo(map);
 let markers = [];
