@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>삿포로 여행지도</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#f3f6f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1615" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+/* 폰 앱 레이아웃: 상단 앱바 → 고정 칩·지도 → 카드 목록, 탭은 하단 내비게이션 */
+:root {
+  --bg: #f3f6f7; --surface: #ffffff; --surface-2: #f5f8f8; --fg: #14201f; --fg-2: #3c4a49; --muted: #7a888a; --line: #e3eaeb;
+  --brand: #12b5a6; --brand-2: #3fd0bf; --brand-strong: #0a877c; --brand-soft: #e1f6f3; --brand-fg: #ffffff;
+  --coral: #f06a45; --coral-soft: #fff0ea; --park: #2f6fed; --me: #1a73e8;
+  --nav-bg: rgba(255, 255, 255, .92);
+  --shadow: 0 1px 2px rgba(16, 40, 38, .05), 0 6px 20px rgba(16, 40, 38, .07);
+  --font: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --map-h: clamp(210px, 33vh, 360px);
+  --nav-h: 66px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #0f1615; --surface: #18211f; --surface-2: #1f2a28; --fg: #e8efee; --fg-2: #c2cfcd; --muted: #8d9d9b; --line: #2a3634;
+  --brand: #2cc9b8; --brand-2: #1a9f92; --brand-strong: #6fe3d5; --brand-soft: #173a36; --brand-fg: #05201d;
+  --coral: #ff8f6b; --coral-soft: #3a241c; --park: #6d9bff; --me: #8ab4f8;
+  --nav-bg: rgba(24, 33, 31, .92);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+  color-scheme: dark } }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 15px; line-height: 1.5; letter-spacing: -0.01em;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 12px);
+  -webkit-tap-highlight-color: transparent; }
+button { font-family: inherit; }
+.wrap { max-width: 560px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* 앱바 */
+.appbar { display: flex; align-items: center; gap: 12px; padding-block: 14px 4px; }
+.logo { flex: none; width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(140deg, var(--brand-2), var(--brand)); box-shadow: 0 4px 12px rgba(18, 181, 166, .35); }
+.logo svg { width: 26px; height: 26px; }
+.brand { min-width: 0; flex: 1; }
+h1 { font-size: 1.2rem; font-weight: 800; margin: 0; letter-spacing: -0.03em; }
+h1 em { font-style: normal; color: var(--brand); }
+.sub { display: block; color: var(--muted); font-size: 0.8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill { flex: none; font-size: 0.75rem; font-weight: 700; color: var(--brand-strong); background: var(--brand-soft); padding: 6px 10px; border-radius: 999px; }
+
+/* 고정 영역: 칩 + 지도 */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 1000; background: var(--bg); padding-block: 10px 8px; display: grid; gap: 10px; }
+.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding-inline: 16px; scroll-padding-inline: 16px; }
+.chips::-webkit-scrollbar { display: none; }
+.search { display: flex; align-items: center; gap: 8px; height: 44px; padding-inline: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); color: var(--muted); }
+.search:focus-within { border-color: var(--brand); }
+.search svg { width: 18px; height: 18px; flex: none; }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--fg); font: 500 0.95rem var(--font); }
+.search input::-webkit-search-cancel-button { display: none; }
+.search button { border: 0; background: var(--surface-2); color: var(--fg-2); width: 26px; height: 26px; border-radius: 50%; font-size: 1rem; line-height: 1; cursor: pointer; }
+.chip.sep { margin-left: 6px; }
+.park.alt .parkgo + .parkgo { margin-left: 10px; }
+.hit { background: var(--brand-soft); color: var(--brand-strong); border-radius: 3px; padding: 0 1px; }
+.chip { flex: none; display: inline-flex; align-items: center; height: 36px; border: 1px solid var(--line); background: var(--surface); color: var(--fg-2); font: 600 0.85rem var(--font); padding: 0 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+.chip[aria-pressed="true"] { border-color: var(--brand); background: var(--brand); color: var(--brand-fg); box-shadow: 0 3px 10px rgba(18, 181, 166, .3); }
+.chip .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; box-shadow: 0 0 0 2px var(--surface); }
+.chip .n { margin-left: 5px; font-weight: 500; opacity: .7; }
+.chip.legend { cursor: default; }
+.mapbox { position: relative; border-radius: 22px; overflow: hidden; box-shadow: var(--shadow); isolation: isolate; }
+#map { height: var(--map-h); background: #dfe7ea; }
+.locate { position: absolute; right: 10px; bottom: 10px; z-index: 500; display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--surface); color: var(--me); font: 700 0.8rem var(--font); padding: 9px 13px; border-radius: 999px; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, .18); }
+.locate[aria-pressed="true"] { background: var(--me); color: #fff; }
+.leaflet-touch .leaflet-bar { border: 0; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); border-radius: 12px; overflow: hidden; }
+
+/* 요약 */
+.hero { margin-top: 8px; border-radius: 22px; padding: 16px 18px; color: #fff; background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%); box-shadow: 0 8px 22px rgba(18, 181, 166, .28); position: relative; overflow: hidden; }
+.hero::after { content: ""; position: absolute; right: -30px; top: -40px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255, 255, 255, .12); }
+.hero .eyebrow { font-size: 0.72rem; font-weight: 800; letter-spacing: .12em; opacity: .85; }
+.hero h2 { margin: 2px 0 12px; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); background: rgba(255, 255, 255, .16); border-radius: 14px; padding: 10px 4px; position: relative; z-index: 1; }
+.stats div { text-align: center; }
+.stats div + div { border-left: 1px solid rgba(255, 255, 255, .25); }
+.stats small { display: block; font-size: 0.7rem; opacity: .85; }
+.stats b { font-size: 0.98rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hero .tip { margin: 10px 0 0; font-size: 0.78rem; opacity: .9; position: relative; z-index: 1; }
+a.route { position: relative; z-index: 1; margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; background: #fff; color: #0a877c; font-weight: 800; font-size: 0.9rem; border-radius: 14px; padding: 11px 12px; box-shadow: 0 3px 10px rgba(0, 0, 0, .1); }
+a.route svg { width: 18px; height: 18px; }
+.head { margin: 10px 2px 2px; }
+.head h2 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -0.03em; }
+.head h2 span { color: var(--brand); }
+.head p { margin: 2px 0 0; color: var(--muted); font-size: 0.82rem; }
+
+/* 카드 목록 */
+ol.list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.card { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: start; background: var(--surface); border: 1.5px solid transparent; border-radius: 20px; padding: 14px; box-shadow: var(--shadow); scroll-margin-top: calc(var(--map-h) + 70px); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.card.food { grid-template-columns: 48px 1fr auto; }
+.card.on { border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft), var(--shadow); }
+.badge { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 0.9rem; box-shadow: 0 2px 6px rgba(0, 0, 0, .15); }
+.badge.emoji { width: 48px; height: 48px; border-radius: 15px; background: var(--brand-soft); font-size: 1.5rem; box-shadow: none; }
+.badge.sq { border-radius: 10px; font-size: 0.8rem; }
+.body { min-width: 0; }
+.time { display: inline-block; font-size: 0.75rem; font-weight: 800; color: var(--brand-strong); background: var(--brand-soft); padding: 2px 9px; border-radius: 999px; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.name { font-weight: 700; font-size: 1rem; line-height: 1.35; overflow-wrap: anywhere; letter-spacing: -0.02em; }
+.genre { color: var(--brand-strong); font-size: 0.82rem; font-weight: 600; margin-top: 1px; }
+.menu { font-size: 0.82rem; color: var(--muted); overflow-wrap: anywhere; margin-top: 2px; }
+.menu b { color: var(--fg-2); font-weight: 600; }
+.desc { font-size: 0.85rem; color: var(--fg-2); margin-top: 6px; line-height: 1.6; overflow-wrap: anywhere; }
+.note { font-size: 0.8rem; color: var(--fg-2); background: var(--surface-2); border-radius: 10px; padding: 6px 10px; margin-top: 8px; overflow-wrap: anywhere; }
+.park { display: flex; gap: 8px; align-items: flex-start; font-size: 0.8rem; color: var(--fg-2); margin-top: 8px; overflow-wrap: anywhere; }
+.park .p { flex: none; width: 20px; height: 20px; border-radius: 6px; background: var(--park); color: #fff; font-size: 0.72rem; font-weight: 800; display: grid; place-items: center; margin-top: 1px; }
+.park.alt { display: grid; grid-template-columns: 20px 1fr; column-gap: 8px; background: var(--coral-soft); border-radius: 12px; padding: 8px 10px; }
+.park.alt .p { background: var(--coral); }
+.park.alt .t { min-width: 0; }
+.park.alt .t b { display: block; color: var(--coral); font-weight: 700; font-size: 0.75rem; }
+a.parkgo { grid-column: 2; margin-top: 4px; text-decoration: none; font-weight: 700; font-size: 0.78rem; color: var(--coral); }
+a.parkgo.main { display: block; color: var(--park); }
+.dist { display: inline-block; font-size: 0.72rem; font-weight: 700; color: var(--me); background: rgba(26, 115, 232, .1); padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; }
+.src { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; margin-left: 6px; color: var(--brand-strong); background: var(--brand-soft); vertical-align: 2px; letter-spacing: 0; }
+.src.trend { color: var(--coral); background: var(--coral-soft); }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tag { font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; color: var(--brand-strong); background: var(--brand-soft); }
+.tag.t-치이카와 { color: #c2410c; background: #ffedd5; }
+.tag.t-건담 { color: #1d4ed8; background: #dbeafe; }
+.tag.t-가챠 { color: #7e22ce; background: #f3e8ff; }
+.tag.t-산리오 { color: #be185d; background: #fce7f3; }
+@media (prefers-color-scheme: dark) { .tag.t-산리오 { color: #f9a8d4; background: #4a0d2a; } }
+@media (prefers-color-scheme: dark) { .tag.t-치이카와 { color: #fdba74; background: #431d0a; } .tag.t-건담 { color: #93c5fd; background: #172554; } .tag.t-가챠 { color: #d8b4fe; background: #3b0764; } }
+a.go { align-self: start; display: grid; justify-items: center; gap: 2px; text-decoration: none; font: 700 0.7rem var(--font); color: var(--brand-strong); background: var(--brand-soft); border-radius: 14px; padding: 8px 9px 6px; min-width: 50px; }
+a.go svg { width: 20px; height: 20px; }
+/* 지도 + 경로 버튼 세로 묶음 */
+.acts { align-self: start; display: grid; gap: 6px; }
+a.go.route { color: #fff; background: var(--brand); }
+a.go.walk { color: var(--brand-strong); background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--brand); }
+a:focus-visible, button:focus-visible, .card:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* 일정 탭: 카드 사이 이동 구간 */
+.leg { display: flex; align-items: center; gap: 8px; margin: -4px 0; padding-left: 29px; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.leg::before { content: ""; width: 2px; height: 26px; background: repeating-linear-gradient(var(--line) 0 4px, transparent 4px 8px); margin-right: 10px; }
+.leg a { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-weight: 600; color: var(--fg-2); text-decoration: none; }
+.leg a b { color: var(--brand-strong); font-weight: 700; margin-left: 4px; }
+
+.foot { font-size: 0.75rem; color: var(--muted); margin-top: 22px; line-height: 1.7; background: var(--surface-2); border-radius: 16px; padding: 14px 16px; }
+
+/* 하단 내비게이션 */
+.nav { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; z-index: 1100; width: min(560px, 100%); display: grid; grid-template-columns: repeat(4, 1fr);
+  background: var(--nav-bg); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-top: 1px solid var(--line); border-radius: 22px 22px 0 0;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -6px 24px rgba(16, 40, 38, .08); }
+.nav button { display: grid; justify-items: center; gap: 3px; border: 0; background: transparent; color: var(--muted); font: 700 0.72rem var(--font); cursor: pointer; padding: 0; }
+.nav .ico { width: 52px; height: 32px; border-radius: 999px; display: grid; place-items: center; transition: background .2s, color .2s; }
+.nav svg { width: 22px; height: 22px; }
+.nav button[aria-selected="true"] { color: var(--brand-strong); }
+.nav button[aria-selected="true"] .ico { background: var(--brand); color: var(--brand-fg); box-shadow: 0 4px 12px rgba(18, 181, 166, .35); }
+
+/* 지도 핀·팝업 */
+.pin { display: grid; place-items: center; border-radius: 50%; color: #fff; font: 800 13px var(--font); border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+.pin.sq { border-radius: 9px; }
+.pin.emoji { background: #fff; font-size: 17px; }
+.pin.on { outline: 3px solid var(--brand); outline-offset: 1px; }
+.me-dot { width: 16px; height: 16px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(26, 115, 232, .25); }
+.leaflet-popup-content-wrapper { border-radius: 14px; }
+.leaflet-popup-content { font-family: var(--font); font-size: 13px; margin: 11px 13px; line-height: 1.5; }
+.leaflet-popup-content a { color: #0a877c; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="appbar">
+    <span class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20L15 9.5 13.3 12 11 8.5z"/><path d="M11.5 6c0-1.6 1.4-1.6 1.4-3M14.6 6.3c.9-1 2-.6 2.6-1.7"/></svg>
+    </span>
+    <div class="brand">
+      <h1>삿포로 <em>여행지도</em></h1>
+      <span class="sub">삿포로 · 오타루 · 조잔케이</span>
+    </div>
+    <span class="pill">7일</span>
+  </header>
+  <div class="top">
+    <div class="search" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="검색: 라멘, 징기스칸, 치이카와, 야경…" autocomplete="off" enterkeyhint="search" aria-label="장소 검색">
+      <button id="qclear" type="button" aria-label="검색어 지우기" hidden>×</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="mapbox">
+      <div id="map" role="region" aria-label="지도"></div>
+      <button class="locate" id="locate" aria-pressed="false">◎ 내 위치</button>
+    </div>
+  </div>
+  <div id="summary"></div>
+  <ol class="list" id="list"></ol>
+  <p class="foot">
+    '지도' 버튼을 누르면 구글맵 앱의 해당 장소로, '경로'·'도보' 버튼을 누르면 내 위치에서 그곳까지 대중교통·도보 길찾기로 넘어가요.<br>
+    '오늘 경로 구글맵으로 열기'는 그날 들를 곳을 순서대로 경유지에 넣은 대중교통 경로를 열어요(대중교통은 구글맵이 경유지를 지원하지 않아 출발·도착만 반영될 수 있어요). 휴대폰 브라우저에서 경유지가 잘리면 카드 사이 🚗 길찾기로 한 구간씩 가면 돼요.<br>
+    위쪽 검색창에서 지금 탭 안을 찾아요('전체에서'로 넓히기). '내 위치'를 켜면 가까운 순으로 정렬되고 500m·1km·3km 반경으로 거를 수 있어요. 위치는 이 화면에서만 쓰이고 어디에도 저장·전송되지 않아요.<br>
+    지도 © OpenStreetMap contributors · 도로 경로·시간 Valhalla/OSRM 추정(실제는 20~30% 더 걸림)<br>
+    겨울(12월)이라 렌터카 대신 대중교통으로 짰어요. 구간 시간은 JR·버스 안내 기준 추정이고 지도의 선은 직선이에요.<br>해가 16:00에 져요 — 야경·일루미네이션은 해 진 직후가 가장 예뻐요.<br>영업시간·요금은 2026-10 검색 기준이라 가기 전에 공식 사이트로 확인하세요.
+  </p>
+</div>
+<nav class="nav" role="tablist" aria-label="화면 전환">
+  <button id="tab-day" role="tab" aria-selected="true" data-tab="day"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span>일정</button>
+  <button id="tab-food" role="tab" aria-selected="false" data-tab="food"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11M17 21V3c-2 1.5-3 4-3 7h3"/></svg></span>맛집</button>
+  <button id="tab-shop" role="tab" aria-selected="false" data-tab="shop"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1.2 12H6.2z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg></span>쇼핑</button>
+  <button id="tab-stay" role="tab" aria-selected="false" data-tab="stay"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></span>장소</button>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const DATA = {"places":[{"id":0,"cat":"stay","src":"","emoji":"","genre":"","menu":"","desc":"","note":"입국·출국 · 국내선 터미널과 연결 통로(걸어서 약 10분)","name":"신치토세공항 (국제선)","lat":42.7889,"lng":141.6858,"area":"신치토세공항","url":"https://www.google.com/maps/search/?api=1&query=%E6%96%B0%E5%8D%83%E6%AD%B3%E7%A9%BA%E6%B8%AF%20%E5%9B%BD%E9%9A%9B%E7%B7%9A%E3%82%BF%E3%83%BC%E3%83%9F%E3%83%8A%E3%83%AB","short":"신치토세공항"},{"id":1,"cat":"stay","src":"","emoji":"","genre":"","menu":"","desc":"지하보도(치카호)로 삿포로역·오도리·스스키노가 이어지는 위치가 겨울에 편해요. 위치는 가정값이에요.","note":"12/2·3·5 3박 (같은 호텔로 2건 예약) · 12/4 조잔케이 가는 날 큰 짐 맡기기 — 예약 때 짐 보관 문의","name":"삿포로 호텔 (미정 · 삿포로역~오도리 사이)","lat":43.0645,"lng":141.352,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E6%9C%AD%E5%B9%8C%E9%A7%85%20%E5%A4%A7%E9%80%9A%20%E3%83%9B%E3%83%86%E3%83%AB","short":"삿포로 호텔"},{"id":2,"cat":"stay","src":"","emoji":"","genre":"","menu":"","desc":"","note":"12/4(금) 1박 2식 · 15:00 체크인 가정","name":"조잔케이 온천 료칸 (미정 · 1박 2식)","lat":42.966,"lng":141.164,"area":"조잔케이","url":"https://www.google.com/maps/search/?api=1&query=%E5%AE%9A%E5%B1%B1%E6%B8%93%E6%B8%A9%E6%B3%89%20%E6%97%85%E9%A4%A8","short":"조잔케이 료칸"},{"id":3,"cat":"stay","src":"","emoji":"","genre":"","menu":"","desc":"","note":"공항 쾌속·오타루행 JR · 갓파 라이너는 홋카렌 빌딩 앞 27번 승차장","name":"JR 삿포로역","lat":43.068655,"lng":141.350787,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E6%9C%AD%E5%B9%8C%E9%A7%85","short":"삿포로역"},{"id":4,"cat":"stay","src":"","emoji":"","genre":"","menu":"","desc":"","note":"","name":"JR 오타루역","lat":43.197344,"lng":140.994151,"area":"오타루","url":"https://www.google.com/maps/search/?api=1&query=%E5%B0%8F%E6%A8%BD%E9%A7%85","short":"오타루역"},{"id":5,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"오도리 공원을 따라 켜지는 겨울 조명과 독일식 크리스마스 마켓(뱅쇼·소시지·오너먼트). 2025년 기준 오도리 회장 11/21~12/25, 16:30~22:00.","note":"2026 기간·시간은 공식 발표 확인 필요","name":"오도리 공원 화이트 일루미네이션 · 뮌헨 크리스마스 시장","lat":43.059902,"lng":141.34751,"area":"삿포로 시내","url":"https://www.google.com/maps/search/?api=1&query=%E5%A4%A7%E9%80%9A%E5%85%AC%E5%9C%92%20%E3%83%9B%E3%83%AF%E3%82%A4%E3%83%88%E3%82%A4%E3%83%AB%E3%83%9F%E3%83%8D%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3","short":"오도리 일루미네이션"},{"id":6,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"오도리 공원 동쪽 끝 전망대. 일루미네이션을 위에서 내려다봐요.","note":"영업시간·요금 확인 필요","name":"삿포로 TV 타워","lat":43.061113,"lng":141.356448,"area":"삿포로 시내","url":"https://www.google.com/maps/search/?api=1&query=%E3%81%95%E3%81%A3%E3%81%BD%E3%82%8D%E3%83%86%E3%83%AC%E3%83%93%E5%A1%94"},{"id":7,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"석조 창고와 가스등이 늘어선 운하. 해 질 무렵(16:00) 가스등이 켜질 때가 가장 예뻐요. 겨울엔 '푸른 운하' 조명(예년 11월~1월).","note":"가스등 일몰~새벽 4시, 창고군 조명 일몰~22:30(소개 기사) · 무료","name":"오타루 운하","lat":43.202023,"lng":141.0006,"area":"오타루","url":"https://www.google.com/maps/search/?api=1&query=%E5%B0%8F%E6%A8%BD%E9%81%8B%E6%B2%B3"},{"id":8,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"유리공예·오르골·디저트 가게가 모인 오타루 메인 거리. 가게마다 영업시간이 달라요(대개 17~18시).","note":"","name":"사카이마치 거리","lat":43.193,"lng":141.0035,"area":"오타루","url":"https://www.google.com/maps/search/?api=1&query=%E5%B0%8F%E6%A8%BD%20%E5%A0%BA%E7%94%BA%E9%80%9A%E3%82%8A"},{"id":9,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"증기시계 앞 오르골 전문점. 건물 자체가 볼거리예요.","note":"영업시간 확인 필요","name":"오타루 오르골당 본관","lat":43.190579,"lng":141.007792,"area":"오타루","url":"https://www.google.com/maps/search/?api=1&query=%E5%B0%8F%E6%A8%BD%E3%82%AA%E3%83%AB%E3%82%B4%E3%83%BC%E3%83%AB%E5%A0%82%20%E6%9C%AC%E9%A4%A8"},{"id":10,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"삿포로 남쪽 계곡 온천 마을. 갓파(물요괴) 동상과 무료 족욕·손 족욕이 곳곳에 있어요.","note":"","name":"조잔케이 온천 거리 · 갓파 족욕","lat":42.965213,"lng":141.165173,"area":"조잔케이","url":"https://www.google.com/maps/search/?api=1&query=%E5%AE%9A%E5%B1%B1%E6%B8%93%E6%B8%A9%E6%B3%89"},{"id":11,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"계곡 위 빨간 현수교. 눈 덮인 계곡 산책로(약 20분). 눈길 미끄럼 주의.","note":"","name":"후타미 현수교","lat":42.963833,"lng":141.158148,"area":"조잔케이","url":"https://www.google.com/maps/search/?api=1&query=%E4%BA%8C%E8%A6%8B%E5%90%8A%E6%A9%8B"},{"id":12,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"'일본 신 3대 야경'. 해 지는 16:00 직후가 가장 예뻐요. 12월부터 동계 11:00~22:00(상행 마지막 21:30).","note":"왕복 1,800~2,100엔(출처별 차이) · 점검·강풍 운휴 확인 · 오도리에서 노면전차 '로프웨이 입구' + 무료 셔틀","name":"모이와산 로프웨이 (야경)","lat":43.026978,"lng":141.329358,"area":"삿포로 시내","url":"https://www.google.com/maps/search/?api=1&query=%E3%82%82%E3%81%84%E3%82%8F%E5%B1%B1%E3%83%AD%E3%83%BC%E3%83%97%E3%82%A6%E3%82%A7%E3%82%A4"},{"id":13,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"'시로이 코이비토' 과자 공장 테마파크. 2026-07 리뉴얼로 유료 구역 성인 1,200엔(기사).","note":"10:00~18:00(유료 구역 최종 16:30) · 지하철 도자이선 미야노사와역 도보 7분","name":"시로이 코이비토 파크","lat":43.08869,"lng":141.27168,"area":"삿포로 시내","url":"https://www.google.com/maps/search/?api=1&query=%E7%99%BD%E3%81%84%E6%81%8B%E4%BA%BA%E3%83%91%E3%83%BC%E3%82%AF"},{"id":14,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"삿포로 상징 건물. 밖에서 사진만 찍어도 충분해요(오도리 근처).","note":"","name":"삿포로 시계탑","lat":43.062554,"lng":141.353645,"area":"삿포로 시내","url":"https://www.google.com/maps/search/?api=1&query=%E6%9C%AD%E5%B9%8C%E5%B8%82%E6%99%82%E8%A8%88%E5%8F%B0"},{"id":15,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"스키 점프대 꼭대기 전망. 일정엔 넣지 않은 대안(낮 시간).","note":"","name":"오쿠라야마 점프대 전망대","lat":43.051508,"lng":141.289872,"area":"삿포로 시내","url":"https://www.google.com/maps/search/?api=1&query=%E5%A4%A7%E5%80%89%E5%B1%B1%E3%82%B8%E3%83%A3%E3%83%B3%E3%83%97%E7%AB%B6%E6%8A%80%E5%A0%B4"},{"id":16,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"붉은 벽돌 맥주 박물관 + 시음. 눈보라 때 실내 대안. 옆 비어가든에서 징기스칸.","note":"","name":"삿포로 맥주 박물관","lat":43.071408,"lng":141.368996,"area":"삿포로 시내","url":"https://www.google.com/maps/search/?api=1&query=%E3%82%B5%E3%83%83%E3%83%9D%E3%83%AD%E3%83%93%E3%83%BC%E3%83%AB%E5%8D%9A%E7%89%A9%E9%A4%A8"},{"id":17,"cat":"sight","src":"","emoji":"","genre":"","menu":"","desc":"조잔케이 안쪽 당일치기 노천탕 + 인도 카레로 유명. 료칸 대신 당일치기로 갈 때 대안.","note":"","name":"호헤이쿄 온천","lat":42.948944,"lng":141.155875,"area":"조잔케이","url":"https://www.google.com/maps/search/?api=1&query=%E5%AE%9A%E5%B1%B1%E6%B8%93%20%E8%B1%8A%E5%B9%B3%E5%B3%A1%E6%B8%A9%E6%B3%89"},{"id":100,"cat":"food","src":"","emoji":"🍜","genre":"라멘","menu":"삿포로 미소·하코다테 시오·아사히카와 쇼유 등 10곳","desc":"","note":"국내선 터미널 3층 · 도착 후 첫 끼","name":"홋카이도 라멘 도장 (신치토세공항)","lat":42.7752,"lng":141.693,"area":"신치토세공항","url":"https://www.google.com/maps/search/?api=1&query=%E6%96%B0%E5%8D%83%E6%AD%B3%E7%A9%BA%E6%B8%AF%20%E5%8C%97%E6%B5%B7%E9%81%93%E3%83%A9%E3%83%BC%E3%83%A1%E3%83%B3%E9%81%93%E5%A0%B4"},{"id":101,"cat":"food","src":"","emoji":"🐑","genre":"징기스칸(양고기 구이)","menu":"생 양고기 징기스칸 · 마무리 차즈케","desc":"","note":"17시~ · 예약 불가 → 오픈 직후나 늦게 · 줄 김(후기)","name":"징기스칸 다루마 본점","lat":43.0547,"lng":141.3523,"area":"스스키노","url":"https://www.google.com/maps/search/?api=1&query=%E6%88%90%E5%90%89%E6%80%9D%E6%B1%97%E3%81%A0%E3%82%8B%E3%81%BE%20%E6%9C%AC%E5%BA%97"},{"id":102,"cat":"food","src":"","emoji":"🍜","genre":"삿포로 미소라멘","menu":"진한 미소라멘","desc":"","note":"줄 김 · 휴무 확인 필요","name":"스미레 삿포로 스스키노점","lat":43.0566,"lng":141.3547,"area":"스스키노","url":"https://www.google.com/maps/search/?api=1&query=%E3%81%99%E3%81%BF%E3%82%8C%20%E6%9C%AD%E5%B9%8C%E3%81%99%E3%81%99%E3%81%8D%E3%81%AE%E5%BA%97"},{"id":103,"cat":"food","src":"","emoji":"🍜","genre":"라멘 골목","menu":"작은 라멘집 10여 곳","desc":"","note":"스스키노 · 밤늦게까지","name":"원조 라멘 요코초","lat":43.055,"lng":141.354,"area":"스스키노","url":"https://www.google.com/maps/search/?api=1&query=%E5%85%83%E7%A5%96%E3%83%A9%E3%83%BC%E3%83%A1%E3%83%B3%E6%A8%AA%E4%B8%81"},{"id":104,"cat":"food","src":"","emoji":"🍛","genre":"스프카레","menu":"치킨 스프카레 · 매운 단계 선택","desc":"","note":"부정기 휴무·재료 소진 시 종료 · 줄 김","name":"스프카레 GARAKU","lat":43.058052,"lng":141.355098,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E3%82%B9%E3%83%BC%E3%83%97%E3%82%AB%E3%83%AC%E3%83%BC%20GARAKU%20%E6%9C%AD%E5%B9%8C"},{"id":105,"cat":"food","src":"","emoji":"🍣","genre":"회전초밥","menu":"홋카이도 제철 생선 초밥","desc":"","note":"번호표 · 대기 1시간 이상 흔함","name":"회전초밥 네무로 하나마루 (스텔라 플레이스)","lat":43.0682,"lng":141.3512,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E6%A0%B9%E5%AE%A4%E8%8A%B1%E3%81%BE%E3%82%8B%20JR%E3%82%BF%E3%83%AF%E3%83%BC%E3%82%B9%E3%83%86%E3%83%A9%E3%83%97%E3%83%AC%E3%82%A4%E3%82%B9"},{"id":106,"cat":"food","src":"","emoji":"🦀","genre":"시장·해산물 덮밥","menu":"카이센동 · 성게·연어알","desc":"","note":"아침 7시경부터 · 가게별 영업시간 다름","name":"니조 시장 (해산물 덮밥 아침)","lat":43.058247,"lng":141.35846,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E4%BA%8C%E6%9D%A1%E5%B8%82%E5%A0%B4"},{"id":107,"cat":"food","src":"","emoji":"🦀","genre":"시장·해산물 덮밥","menu":"카이센동 · 게","desc":"","note":"오타루역 바로 옆 · 아침~오후","name":"산카쿠 시장 (오타루)","lat":43.198542,"lng":140.993869,"area":"오타루","url":"https://www.google.com/maps/search/?api=1&query=%E5%B0%8F%E6%A8%BD%20%E4%B8%89%E8%A7%92%E5%B8%82%E5%A0%B4"},{"id":108,"cat":"food","src":"","emoji":"🍣","genre":"스시","menu":"오타루 스시 코스","desc":"","note":"가격대 높음 · 예약 권장 · 휴무 확인 필요","name":"마사즈시 본점 (오타루 스시 거리)","lat":43.195,"lng":140.999,"area":"오타루","url":"https://www.google.com/maps/search/?api=1&query=%E6%94%BF%E5%AF%BF%E5%8F%B8%20%E6%9C%AC%E5%BA%97%20%E5%B0%8F%E6%A8%BD"},{"id":109,"cat":"food","src":"","emoji":"🍰","genre":"디저트","menu":"더블 프로마주 치즈케이크","desc":"","note":"사카이마치 거리 끝 · 2층 카페","name":"르타오 본점","lat":43.191307,"lng":141.00744,"area":"오타루","url":"https://www.google.com/maps/search/?api=1&query=%E5%B0%8F%E6%A8%BD%E6%B4%8B%E8%8F%93%E5%AD%90%E8%88%97%E3%83%AB%E3%82%BF%E3%82%AA%E6%9C%AC%E5%BA%97"},{"id":110,"cat":"food","src":"","emoji":"🍰","genre":"디저트·카페","menu":"마루세이 버터샌드 · 카페 한정 메뉴","desc":"","note":"삿포로역 근처","name":"롯카테이 삿포로 본점","lat":43.0663,"lng":141.3487,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E5%85%AD%E8%8A%B1%E4%BA%AD%20%E6%9C%AD%E5%B9%8C%E6%9C%AC%E5%BA%97"},{"id":111,"cat":"food","src":"","emoji":"🍰","genre":"디저트·카페","menu":"슈크림 · 바움쿠헨","desc":"","note":"오도리 근처 · 카페","name":"기타카로 삿포로 본관","lat":43.0626,"lng":141.35,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E5%8C%97%E8%8F%93%E6%A5%BC%20%E6%9C%AD%E5%B9%8C%E6%9C%AC%E9%A4%A8"},{"id":112,"cat":"food","src":"","emoji":"🍦","genre":"디저트·카페","menu":"파르페 · 소프트크림","desc":"","note":"삿포로역~오도리","name":"유키지루시 파라","lat":43.063814,"lng":141.35266,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E9%9B%AA%E5%8D%B0%E3%83%91%E3%83%BC%E3%83%A9%E3%83%BC%20%E6%9C%AD%E5%B9%8C%E6%9C%AC%E5%BA%97"},{"id":113,"cat":"food","src":"","emoji":"🐑","genre":"징기스칸·맥주","menu":"징기스칸 무제한 + 생맥주","desc":"","note":"다루마 줄이 길 때 대안 · 예약 가능","name":"삿포로 비어가든","lat":43.070894,"lng":141.368838,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E3%82%B5%E3%83%83%E3%83%9D%E3%83%AD%E3%83%93%E3%83%BC%E3%83%AB%E5%9C%92"},{"id":114,"cat":"food","src":"","emoji":"🍫","genre":"초콜릿·기념품","menu":"생초콜릿 · 공장 견학 창","desc":"","note":"국내선~국제선 연결동 · 마지막 날","name":"로이스 초콜릿 월드 (신치토세공항)","lat":42.779,"lng":141.689,"area":"신치토세공항","url":"https://www.google.com/maps/search/?api=1&query=%E3%83%AD%E3%82%A4%E3%82%BA%E3%83%81%E3%83%A7%E3%82%B3%E3%83%AC%E3%83%BC%E3%83%88%E3%83%AF%E3%83%BC%E3%83%AB%E3%83%89%20%E6%96%B0%E5%8D%83%E6%AD%B3%E7%A9%BA%E6%B8%AF"},{"id":200,"cat":"shop","src":"","emoji":"⚡","genre":"","menu":"포켓몬 굿즈 · 삿포로 한정품","desc":"","note":"다이마루 영업시간 기준 · 확인 필요","name":"포켓몬센터 삿포로 (다이마루 삿포로점)","lat":43.067487,"lng":141.349482,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E3%83%9D%E3%82%B1%E3%83%A2%E3%83%B3%E3%82%BB%E3%83%B3%E3%82%BF%E3%83%BC%E3%82%B5%E3%83%83%E3%83%9D%E3%83%AD%20%E5%A4%A7%E4%B8%B8%E6%9C%AD%E5%B9%8C","tags":["애니 굿즈","백화점·마트"]},{"id":201,"cat":"shop","src":"","emoji":"🐹","genre":"","menu":"치이카와 공식 굿즈","desc":"","note":"파르코 본관 B2 · 10:00~20:00(2023 개점 안내) · 2026 영업 확인 필요","name":"치이카와랜드 삿포로 파르코점","lat":43.058728,"lng":141.353158,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E3%81%A1%E3%81%84%E3%81%8B%E3%82%8F%E3%82%89%E3%82%93%E3%81%A9%20%E6%9C%AD%E5%B9%8C%E3%83%91%E3%83%AB%E3%82%B3%E5%BA%97","tags":["치이카와"]},{"id":202,"cat":"shop","src":"","emoji":"📚","genre":"","menu":"애니 굿즈·가챠","desc":"","note":"확인 필요","name":"애니메이트 삿포로","lat":43.058754,"lng":141.356133,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E3%82%A2%E3%83%8B%E3%83%A1%E3%82%A4%E3%83%88%E6%9C%AD%E5%B9%8C","tags":["애니 굿즈"]},{"id":203,"cat":"shop","src":"","emoji":"📚","genre":"","menu":"중고 피규어·굿즈","desc":"","note":"다누키코지 근처","name":"만다라케 삿포로","lat":43.056009,"lng":141.350822,"area":"스스키노","url":"https://www.google.com/maps/search/?api=1&query=%E3%81%BE%E3%82%93%E3%81%A0%E3%82%89%E3%81%91%20%E6%9C%AD%E5%B9%8C","tags":["애니 굿즈","가챠"]},{"id":204,"cat":"shop","src":"","emoji":"🛒","genre":"","menu":"과자·화장품·기념품","desc":"","note":"24시간(확인 필요) · 면세","name":"돈키호테 삿포로 다누키코지","lat":43.054779,"lng":141.353817,"area":"스스키노","url":"https://www.google.com/maps/search/?api=1&query=%E3%83%89%E3%83%B3%E3%83%BB%E3%82%AD%E3%83%9B%E3%83%BC%E3%83%86%20%E6%9C%AD%E5%B9%8C%E7%8B%B8%E5%B0%8F%E8%B7%AF%E6%9C%AC%E5%BA%97","tags":["백화점·마트"]},{"id":205,"cat":"shop","src":"","emoji":"🛍️","genre":"","menu":"패션·잡화·식당가","desc":"","note":"삿포로역 직결","name":"삿포로 스텔라 플레이스","lat":43.068046,"lng":141.350991,"area":"삿포로역·오도리","url":"https://www.google.com/maps/search/?api=1&query=%E6%9C%AD%E5%B9%8C%E3%82%B9%E3%83%86%E3%83%A9%E3%83%97%E3%83%AC%E3%82%A4%E3%82%B9","tags":["백화점·마트","팬시·편집샵"]}],"days":[{"label":"1일차","color":"#607D8B","items":[{"pid":0,"time":"11:55","memo":"도착(가정) · 입국 후 국내선 터미널로 걸어서 이동"},{"pid":100,"time":"13:00","memo":"첫 끼 라멘 · 이후 국내선 B1 JR 역"},{"pid":3,"time":"14:40","memo":"쾌속 에어포트 약 37~40분 · 1,230엔(경로 검색 기준)"},{"pid":1,"time":"15:00","memo":"체크인 · 짐 두기"},{"pid":200,"time":"15:30","memo":"다이마루 삿포로 · 포켓몬센터"},{"pid":201,"time":"16:15","memo":"파르코 B2 치이카와랜드 (영업 확인)"},{"pid":5,"time":"16:45","memo":"★ 점등 16:30~ · 뮌헨 크리스마스 시장 뱅쇼 · 해는 16:00에 짐"},{"pid":6,"time":"17:45","memo":"TV 타워에서 일루미네이션 내려다보기"},{"pid":101,"time":"18:30","memo":"징기스칸 다루마 — 줄 서기 각오 · 길면 비어가든 대안"},{"pid":1,"time":"20:30","memo":"호텔 복귀"}],"legs":[null,{"km":2.0,"min":10},{"km":53.6,"min":40},{"km":0.6,"min":10},{"km":0.5,"min":10},{"km":1.3,"min":15},{"km":0.6,"min":3},{"km":0.9,"min":5},{"km":1.0,"min":15},{"km":1.4,"min":15}],"line":[[141.6858,42.7889],[141.693,42.7752],[141.3508,43.0687],[141.352,43.0645],[141.3495,43.0675],[141.3532,43.0587],[141.3475,43.0599],[141.3564,43.0611],[141.3523,43.0547],[141.352,43.0645],[141.352,43.0645]],"km":61.9,"min":123},{"label":"2일차","color":"#E53935","items":[{"pid":1,"time":"08:45","memo":"출발 · 방한 신발(미끄럼)"},{"pid":3,"time":"09:00","memo":"JR 오타루행 쾌속(약 35~45분) · 운하 쪽은 오타루역보다 미나미오타루역이 가까움"},{"pid":4,"time":"09:45","memo":"도착"},{"pid":107,"time":"10:00","memo":"산카쿠 시장 해산물 덮밥(아침 겸 점심)"},{"pid":7,"time":"11:00","memo":"낮의 운하 산책 · 사진"},{"pid":8,"time":"12:00","memo":"사카이마치 거리 — 유리공예·디저트 · 기타이치 홀(램프 카페)"},{"pid":109,"time":"13:30","memo":"르타오 본점 카페 · 쉬어 가기"},{"pid":9,"time":"14:15","memo":"오르골당 본관"},{"pid":7,"time":"15:40","memo":"★ 해 질 녘(16:00) 가스등·창고 조명 켜지는 운하"},{"pid":108,"time":"16:45","memo":"오타루 스시 저녁 (예약 권장)"},{"pid":4,"time":"18:15","memo":"JR로 삿포로 복귀"},{"pid":1,"time":"19:15","memo":"호텔"}],"legs":[null,{"km":0.6,"min":10},{"km":40.4,"min":40},{"km":0.2,"min":2},{"km":0.8,"min":10},{"km":1.3,"min":10},{"km":0.5,"min":10},{"km":0.1,"min":2},{"km":1.7,"min":15},{"km":1.0,"min":10},{"km":0.6,"min":10},{"km":40.7,"min":50}],"line":[[141.352,43.0645],[141.3508,43.0687],[140.9942,43.1973],[141.0006,43.202],[141.0035,43.193],[141.0074,43.1913],[141.0006,43.202],[140.999,43.195],[140.9942,43.1973],[141.352,43.0645],[141.352,43.0645]],"km":87.9,"min":169},{"label":"3일차","color":"#FB8C00","items":[{"pid":1,"time":"08:15","memo":"큰 짐은 호텔에 맡기고 1박 짐만"},{"pid":106,"time":"08:30","memo":"니조 시장 카이센동 아침"},{"pid":1,"time":"09:45","memo":"짐 맡기기 · 쉬기"},{"pid":3,"time":"11:00","memo":"갓파 라이너(예약제, 약 60분) — 11시대 편 가정, 시각 확인 · 홋카렌 빌딩 앞 27번"},{"pid":10,"time":"12:15","memo":"온천 거리 점심 · 갓파 족욕"},{"pid":11,"time":"13:30","memo":"후타미 현수교 눈길 산책(약 20~30분) — 미끄럼 주의"},{"pid":2,"time":"15:00","memo":"★ 료칸 체크인 · 온천 · 18:00 가이세키(2식)"}],"legs":[null,{"km":1.1,"min":15},{"km":1.1,"min":15},{"km":0.6,"min":10},{"km":23.7,"min":60},{"km":0.7,"min":10},{"km":0.7,"min":10}],"line":[[141.352,43.0645],[141.3585,43.0582],[141.352,43.0645],[141.3508,43.0687],[141.1652,42.9652],[141.1581,42.9638],[141.164,42.966],[141.164,42.966]],"km":27.9,"min":120},{"label":"4일차","color":"#43A047","items":[{"pid":2,"time":"11:00","memo":"아침 온천 · 체크아웃 11:00(가정)"},{"pid":3,"time":"12:15","memo":"갓파 라이너로 삿포로역"},{"pid":104,"time":"12:45","memo":"스프카레 점심 (줄 길면 스텔라 플레이스 식당가)"},{"pid":13,"time":"14:00","memo":"시로이 코이비토 파크 (유료 구역 최종 16:30)"},{"pid":12,"time":"16:30","memo":"★ 모이와산 야경 — 해 진 직후 · 바람 강하면 운휴"},{"pid":102,"time":"18:30","memo":"스미레 미소라멘 (또는 라멘 요코초)"},{"pid":204,"time":"19:30","memo":"돈키호테·다누키코지 쇼핑(면세)"},{"pid":1,"time":"21:00","memo":"호텔 (짐 찾기)"}],"legs":[null,{"km":23.7,"min":60},{"km":1.5,"min":15},{"km":9.5,"min":30},{"km":10.4,"min":45},{"km":4.9,"min":30},{"km":0.3,"min":5},{"km":1.4,"min":15}],"line":[[141.164,42.966],[141.3508,43.0687],[141.3551,43.0581],[141.2717,43.0887],[141.3294,43.027],[141.3547,43.0566],[141.3538,43.0548],[141.352,43.0645],[141.352,43.0645]],"km":51.7,"min":200},{"label":"5일차","color":"#1E88E5","items":[{"pid":1,"time":"08:30","memo":"체크아웃"},{"pid":3,"time":"09:00","memo":"쾌속 에어포트"},{"pid":114,"time":"09:45","memo":"국내선 터미널 기념품(시로이 코이비토·롯카테이·르타오) · 로이스 초콜릿 월드"},{"pid":0,"time":"11:00","memo":"국제선 체크인 · 13:00 출발(가정) → 인천"}],"legs":[null,{"km":0.6,"min":10},{"km":53.0,"min":40},{"km":1.4,"min":10}],"line":[[141.352,43.0645],[141.3508,43.0687],[141.689,42.779],[141.6858,42.7889],[141.6858,42.7889]],"km":55.0,"min":60}]};
+const P = DATA.places;
+const AREAS = ["전체", "삿포로역·오도리", "스스키노", "오타루", "조잔케이", "신치토세공항"];
+const SHOP_TAGS = ["전체", "치이카와", "애니 굿즈", "가챠", "팬시·편집샵", "백화점·마트"];
+const ZONES = ["전체", "숙소·교통", "삿포로 시내", "오타루", "조잔케이"];
+const ZONE_MAP = {"삿포로역·오도리": "삿포로 시내", "스스키노": "삿포로 시내"};  // area → 숙소·명소 탭 구역 (없으면 area 그대로)
+const zoneOf = (p) => p.cat === "stay" ? "숙소·교통" : (p.zone || ZONE_MAP[p.area] || p.area);
+const CAT_COLOR = { stay: "#f06a45", sight: "#12b5a6" };
+const $ = (id) => document.getElementById(id);
+const MAP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8z"/></svg>';
+const gmap = (q) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+// 이동 수단: driving(렌터카) / transit(대중교통) — 길찾기 링크·아이콘에 공통 적용
+const MODE = "transit", LEG_ICON = MODE === "transit" ? "🚆" : "🚗";
+// 구글맵 길찾기 링크: 첫 곳 출발 → 중간은 경유지 → 마지막 도착 (API 키 필요 없음)
+const ll = (p) => `${p.lat},${p.lng}`;
+function dirUrl(ps) {
+  const q = new URLSearchParams({ api: "1", origin: ll(ps[0]), destination: ll(ps[ps.length - 1]), travelmode: MODE });
+  if (ps.length > 2) q.set("waypoints", ps.slice(1, -1).map(ll).join("|"));
+  return "https://www.google.com/maps/dir/?" + q.toString();
+}
+// 내 위치 → 장소 길찾기: origin을 비우면 구글맵이 현재 위치를 출발지로 씀
+const routeUrl = (p, mode = MODE) => "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", destination: ll(p), travelmode: mode }).toString();
+const WALK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M9 20l3-6 3 3v4M12 14l-1-5 4 1 2 3M11 9l-3 2v3"/></svg>';
+const ROUTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>';
+
+let state = { tab: "day", day: 0, area: "전체", tag: "전체", zone: "전체", on: null, q: "", qall: false, radius: 0 };
+// 검색 사전: SAME = 같은 말(양방향), CAT = 분류 단어 → 해당 항목들(한 방향). 한 글자 단어는 넣지 않음
+const SAME = [
+  ["라면", "라멘"], ["돈까스", "돈카츠"], ["초밥", "스시"], ["닭", "치킨"], ["건담", "건프라"], ["가챠", "가샤폰"],
+  ["주차", "주차장", "파킹"], ["산리오", "키티", "쿠로미", "마이멜로디", "시나모롤"], ["기념품", "오미야게"], ["카페", "커피"],
+  ["무료", "공짜"], ["편집샵", "잡화"], ["장어", "우나기"], ["가츠오", "가다랑어"],
+];
+const CAT = {
+  "해산물": ["생선", "사시미", "스시", "초밥", "회전초밥", "이세에비", "장어", "가츠오", "해산물덮밥", "기비나고", "어협"],
+  "고기": ["야키니쿠", "와규", "스테이크", "흑우", "흑돼지", "함박", "지도리"], "라면": ["카라멘", "이에케이", "니보시", "돈코츠"],
+  "국수": ["소멘", "소바", "우동"], "디저트": ["빙수", "시로쿠마", "소프트", "크레페", "아사이", "베이커리"],
+  "온천": ["족욕", "모래찜질", "노천탕"], "술": ["이자카야", "소주", "와인"], "전망": ["전망대", "야경"],
+  "편집샵": ["팬시", "문구"], "마트": ["슈퍼", "백화점", "장보기"], "닭": ["지도리", "야키토리", "가라아게", "치킨난반"],
+};
+const norm = (t) => (t || "").toLowerCase().replace(/\s+/g, "");
+function expand(word) {
+  const w = norm(word), out = new Set([w]);
+  SAME.forEach(g => { if (g.some(x => norm(x) === w)) g.forEach(x => out.add(norm(x))); });
+  [...out].forEach(x => { for (const k in CAT) if (norm(k) === x) CAT[k].forEach(y => out.add(norm(y))); });
+  return [...out];
+}
+const hay = (p) => norm([p.name, p.genre, p.menu, p.desc, p.note, (p.tags || []).join(" "), p.area, p.park, p.parkAlt && p.parkAlt.text, p.src].join(" "));
+function score(p, words) {
+  const h = hay(p), n = norm(p.name + " " + (p.genre || ""));
+  let sc = 0;
+  for (const w of words) { const alts = expand(w); if (!alts.some(a => h.includes(a))) return -1; sc += alts.some(a => n.includes(a)) ? 2 : 1; }
+  return sc;
+}
+const RADII = [0, 0.5, 1, 3];
+const fmtR = (r) => r === 0 ? "거리 전체" : r < 1 ? `${r * 1000}m 이내` : `${r}km 이내`;
+const inRadius = (p) => !me || !state.radius || kmTo(p) <= state.radius;
+const TAB_CATS = { food: ["food"], shop: ["shop"], stay: ["stay", "sight"], day: ["stay", "sight", "food", "shop"] };
+function asItem(p) {
+  if (p.cat === "food" || p.cat === "shop") return { p, label: p.emoji, emoji: true };
+  return { p, label: p.cat === "stay" ? "숙" : "", color: CAT_COLOR[p.cat], sq: p.cat === "stay" };
+}
+try { Object.assign(state, JSON.parse(localStorage.getItem("spk-map") || "{}"), { on: null }); } catch (e) {}
+const save = () => { try { localStorage.setItem("spk-map", JSON.stringify({ tab: state.tab, day: state.day, area: state.area, tag: state.tag, zone: state.zone, radius: state.radius })); } catch (e) {} };
+state.q = ""; state.qall = false;
+const shopsWith = (t) => P.filter(p => p.cat === "shop" && (t === "전체" || p.tags.includes(t)));
+const placesIn = (z) => P.filter(p => (p.cat === "stay" || p.cat === "sight") && (z === "전체" || zoneOf(p) === z));
+let me = null, watchId = null, meMarker = null;
+
+const map = L.map("map", { zoomControl: false, attributionControl: true });
+L.control.zoom({ position: "topright" }).addTo(map);
+// CARTO 타일은 API 키가 필요해져서 OSM 기본 타일 사용 (https 페이지에서만 표시, 로컬 파일로 열면 차단될 수 있음)
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let markers = [];
+
+function kmTo(p) {
+  if (!me) return null;
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (p.lat - me.lat) * rad, dLng = (p.lng - me.lng) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(me.lat * rad) * Math.cos(p.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+const fmtKm = (k) => k == null ? "" : k < 1 ? `${Math.round(k * 1000)}m` : `${k.toFixed(k < 10 ? 1 : 0)}km`;
+
+function searchItems() {
+  const words = state.q.trim().split(/\s+/).filter(Boolean);
+  const cats = state.qall ? TAB_CATS.day : TAB_CATS[state.tab];
+  let list = P.filter(p => cats.includes(p.cat)).map(p => ({ p, sc: score(p, words) })).filter(x => x.sc >= 0 && inRadius(x.p));
+  list.sort((a, b) => me ? kmTo(a.p) - kmTo(b.p) : b.sc - a.sc);
+  return list.map(x => asItem(x.p));
+}
+
+function currentItems() {
+  if (state.q.trim()) return searchItems();
+  if (state.tab === "day") {
+    const d = DATA.days[state.day];
+    return d.items.map((it, i) => ({ p: P.find(x => x.id === it.pid), label: String(i + 1), color: d.color, time: it.time, memo: it.memo, leg: d.legs[i] }));
+  }
+  if (state.tab === "food") {
+    let list = P.filter(p => p.cat === "food" && (state.area === "전체" || p.area === state.area) && inRadius(p)).map(p => ({ p, label: p.emoji, emoji: true }));
+    if (me) list.sort((a, b) => kmTo(a.p) - kmTo(b.p));
+    return list;
+  }
+  if (state.tab === "shop") {
+    const list = shopsWith(state.tag).filter(inRadius).map(p => ({ p, label: p.emoji, emoji: true }));
+    if (me) list.sort((a, b) => kmTo(a.p) - kmTo(b.p));
+    return list;
+  }
+  return placesIn(state.zone).map(p => ({ p, label: p.cat === "stay" ? "숙" : "", color: CAT_COLOR[p.cat], sq: p.cat === "stay" }));
+}
+
+function renderChips() {
+  const box = $("chips"); box.innerHTML = "";
+  const add = (id, pressed, html, onclick) => {
+    const b = document.createElement("button"); b.className = "chip"; b.id = id;
+    b.setAttribute("aria-pressed", String(pressed)); b.innerHTML = html; b.onclick = onclick; box.appendChild(b);
+  };
+  const radiusChips = () => { if (!me) return; RADII.forEach((r, i) => add("chip-r-" + i, state.radius === r, (i === 0 ? "📍 " : "") + fmtR(r),
+    () => { state.radius = r; state.on = null; save(); render(true); })); if (box.children.length > RADII.length) box.children[box.children.length - RADII.length].classList.add("sep"); };
+  if (state.q.trim()) {
+    const names = { day: "일정", food: "맛집", shop: "쇼핑", stay: "장소" };
+    add("chip-scope-0", !state.qall, `${state.tab === "day" ? "장소·맛집·쇼핑" : names[state.tab]}에서`, () => { state.qall = false; render(true); });
+    if (state.tab !== "day") add("chip-scope-1", state.qall, "전체에서", () => { state.qall = true; render(true); });
+    radiusChips();
+  } else if (state.tab === "day") {
+    DATA.days.forEach((d, i) => add("chip-day-" + i, i === state.day, `<span class="dot" style="background:${d.color}"></span>${d.label}`,
+      () => { state.day = i; state.on = null; save(); render(true); }));
+  } else if (state.tab === "food") {
+    AREAS.forEach((a, i) => {
+      const n = P.filter(p => p.cat === "food" && (a === "전체" || p.area === a)).length;
+      add("chip-area-" + i, a === state.area, `${a}<span class="n">${n}</span>`, () => { state.area = a; state.on = null; save(); render(true); });
+    });
+    radiusChips();
+  } else if (state.tab === "shop") {
+    SHOP_TAGS.forEach((t, i) => add("chip-tag-" + i, t === state.tag, `${t}<span class="n">${shopsWith(t).length}</span>`,
+      () => { state.tag = t; state.on = null; save(); render(true); }));
+    radiusChips();
+  } else {
+    ZONES.forEach((z, i) => add("chip-zone-" + i, z === state.zone,
+      `${z === "숙소·교통" ? `<span class="dot" style="background:${CAT_COLOR.stay}"></span>` : ""}${z}<span class="n">${placesIn(z).length}</span>`,
+      () => { state.zone = z; state.on = null; save(); render(true); }));
+  }
+  const on = box.querySelector('[aria-pressed="true"]'); if (on) on.scrollIntoView({ block: "nearest", inline: "center" });
+}
+
+function popupHtml(p) {
+  return `<b>${p.emoji ? p.emoji + " " : ""}${p.name}</b>${p.genre ? "<br>" + p.genre : ""}${p.menu ? "<br>" + p.menu : ""}${p.park ? "<br>🅿 " + p.park : ""}<br><a href="${p.url}" target="_blank" rel="noopener">구글맵에서 열기</a> · <a href="${routeUrl(p)}" target="_blank" rel="noopener">🚗 경로</a> · <a href="${routeUrl(p, "walking")}" target="_blank" rel="noopener">🚶 도보</a>`;
+}
+
+function renderMap(items, fit) {
+  layer.clearLayers(); markers = [];
+  const dayView = state.tab === "day" && !state.q.trim();
+  if (dayView) {
+    const d = DATA.days[state.day];
+    L.polyline(d.line.map(([x, y]) => [y, x]), { color: d.color, weight: 5, opacity: 0.85 }).addTo(layer);
+  }
+  const last = new Map(); items.forEach((it, i) => last.set(it.p.id, i));
+  items.forEach((it, i) => {
+    const dup = dayView && last.get(it.p.id) !== i;   // 같은 숙소 출발·도착은 마지막 번호만
+    const lbl = dayView && i === items.length - 1 && items[0].p.id === it.p.id ? "1·" + it.label : it.label;
+    const cls = "pin" + (it.emoji ? " emoji" : "") + (it.sq ? " sq" : "") + (state.on === i ? " on" : "");
+    const size = it.emoji ? 30 : 26;
+    const icon = L.divIcon({ className: "", html: `<div class="${cls}" style="width:${size}px;height:${size}px;${it.emoji ? "" : "background:" + it.color}">${lbl}</div>`, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+    const m = L.marker([it.p.lat, it.p.lng], { icon, zIndexOffset: state.on === i ? 1000 : 0 }).bindPopup(popupHtml(it.p));
+    m.on("click", () => select(i, true));
+    if (!dup) m.addTo(layer);
+    markers[i] = m;
+  });
+  if (fit && items.length) {
+    const pts = items.map(it => [it.p.lat, it.p.lng]);
+    if ((state.tab === "food" || state.tab === "shop" || state.q.trim()) && me) pts.push([me.lat, me.lng]);
+    map.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 15 });
+  }
+}
+
+function parkHtml(p) {
+  let h = p.park ? `<div class="park"><span class="p">P</span><span>${p.park}${p.parkUrl ? `<a class="parkgo main" href="${p.parkUrl}" target="_blank" rel="noopener">주차장 위치 보기 →</a>` : ""}</span></div>` : "";
+  if (p.parkAlt) h += `<div class="park alt"><span class="p">P</span><span class="t"><b>근처 최저가</b> ${p.parkAlt.text}</span>${(p.parkAlt.links || (p.parkAlt.q ? [{ label: "주차장 위치 보기", url: gmap(p.parkAlt.q) }] : [])).map(l => `<a class="parkgo" href="${l.url}" target="_blank" rel="noopener">${l.label} →</a>`).join("")}</div>`;
+  return h;
+}
+
+function mark(text) {
+  const words = state.q.trim().split(/\s+/).filter(Boolean); if (!words.length) return text;
+  let out = text;
+  words.flatMap(expand).filter(a => a.length > 1).forEach(a => { const i = norm(out).indexOf(a); if (i >= 0 && !out.includes("<mark")) {
+    let k = 0, start = -1, end = -1; for (let j = 0; j < out.length; j++) { if (/\s/.test(out[j])) continue; if (k === i) start = j; if (k === i + a.length - 1) { end = j + 1; break; } k++; }
+    if (start >= 0 && end > start) out = out.slice(0, start) + `<mark class="hit">${out.slice(start, end)}</mark>` + out.slice(end); } });
+  return out;
+}
+
+function renderList(items) {
+  const ol = $("list"); ol.innerHTML = "";
+  items.forEach((it, i) => {
+    const p = it.p;
+    if (state.tab === "day" && !state.q.trim() && it.leg) {
+      const leg = document.createElement("li"); leg.className = "leg";
+      leg.innerHTML = `<a href="${dirUrl([items[i - 1].p, p])}" target="_blank" rel="noopener">${LEG_ICON} 약 ${it.leg.min}분 · ${it.leg.km}km<b>길찾기 →</b></a>`; ol.appendChild(leg);
+    }
+    const li = document.createElement("li");
+    li.className = "card" + (it.emoji ? " food" : "") + (state.on === i ? " on" : ""); li.id = "card-" + i;
+    const badge = it.emoji ? `<span class="badge emoji">${p.emoji || "📍"}</span>` : `<span class="badge${it.sq ? " sq" : ""}" style="background:${it.color}">${it.label}</span>`;
+    const src = p.src && p.src !== "일정" ? `<span class="src${p.src === "트렌드" ? " trend" : ""}">${p.src}</span>` : "";
+    const dist = me ? `<span class="dist">${fmtKm(kmTo(p))}</span>` : "";
+    li.innerHTML = `${badge}
+      <div class="body">
+        ${it.time ? `<div class="time">${it.time}</div>` : ""}
+        <div class="name">${mark(p.name)}${src}${dist}</div>
+        ${p.genre ? `<div class="genre">${p.genre}</div>` : ""}
+        ${p.tags ? `<div class="tags">${p.tags.map(t => `<span class="tag t-${t}">${t}</span>`).join("")}</div>` : ""}
+        ${p.menu ? `<div class="menu"><b>${p.cat === "shop" ? "취급 상품" : "대표 메뉴"}</b> ${p.menu}</div>` : ""}
+        ${p.desc ? `<div class="desc">${p.desc}</div>` : ""}
+        ${it.memo ? `<div class="note">${it.memo}</div>` : ""}
+        ${p.note && (state.tab !== "day" || state.q.trim()) ? `<div class="note">${p.note}</div>` : ""}
+        ${parkHtml(p)}
+      </div>
+      <div class="acts">
+        <a class="go" href="${p.url}" target="_blank" rel="noopener" aria-label="${p.name} 구글맵">${MAP_ICON}지도</a>
+        <a class="go route" href="${routeUrl(p)}" target="_blank" rel="noopener" aria-label="내 위치에서 ${p.name}까지 경로">${ROUTE_ICON}경로</a>
+        <a class="go walk" href="${routeUrl(p, "walking")}" target="_blank" rel="noopener" aria-label="내 위치에서 ${p.name}까지 도보 경로">${WALK_ICON}도보</a>
+      </div>`;
+    li.addEventListener("click", (e) => { if (!e.target.closest("a")) select(i, false); });
+    ol.appendChild(li);
+  });
+}
+
+function renderSummary(items) {
+  const s = $("summary");
+  if (state.q.trim()) {
+    const tip = items.length ? (me ? "가까운 순으로 정렬했어요" : "'내 위치'를 켜면 가까운 순으로 정렬돼요") : "결과가 없어요. '전체에서'로 넓히거나 다른 말로 찾아보세요 (예: 라면 → 라멘)";
+    s.innerHTML = `<div class="head"><h2>‘${state.q.trim().replace(/[<>&"]/g, "")}’ 검색 <span>${items.length}</span></h2><p>${tip}</p></div>`;
+    return;
+  }
+  if (state.tab === "day") {
+    const d = DATA.days[state.day];
+    const h = Math.floor(d.min / 60), m = d.min % 60;
+    s.innerHTML = `<section class="hero">
+      <div class="eyebrow">DAY ${state.day + 1}</div>
+      <h2>${d.label} 일정</h2>
+      <div class="stats">
+        <div><small>방문</small><b>${items.length}곳</b></div>
+        <div><small>운전</small><b>${h ? h + "시간 " : ""}${m}분</b></div>
+        <div><small>거리</small><b>${d.km}km</b></div>
+      </div>
+      <a class="route" href="${dirUrl(items.map(x => x.p))}" target="_blank" rel="noopener">${MAP_ICON}오늘 경로 구글맵으로 열기</a>
+      <p class="tip">구간별 길찾기는 카드 사이 ${LEG_ICON} 버튼 · 식사는 '맛집' 탭에서</p>
+    </section>`;
+  } else if (state.tab === "food") {
+    s.innerHTML = `<div class="head"><h2>${state.area} 맛집 <span>${items.length}</span></h2><p>${me ? "가까운 순으로 정렬했어요" : "'내 위치'를 켜면 가까운 순으로 정렬돼요"}</p></div>`;
+  } else if (state.tab === "shop") {
+    s.innerHTML = `<div class="head"><h2>${state.tag === "전체" ? "쇼핑" : state.tag} <span>${items.length}</span></h2><p>포켓몬·치이카와·애니 굿즈, 돈키호테, 역 쇼핑몰 ·${me ? "가까운 순으로 정렬했어요" : "'내 위치'를 켜면 가까운 순"}</p></div>`;
+  } else {
+    const nStay = items.filter(i => i.p.cat === "stay").length, nSight = items.filter(i => i.p.cat === "sight").length;
+    s.innerHTML = `<div class="head"><h2>${state.zone === "전체" ? "장소" : state.zone} <span>${items.length}</span></h2><p>${nStay ? `숙소·공항·렌터카 ${nStay}곳 · ` : ""}명소 ${nSight}곳 · 주차 정보 포함</p></div>`;
+  }
+}
+
+function select(i, fromMap) {
+  state.on = i;
+  const items = currentItems();
+  renderMap(items, false); renderList(items);
+  const it = items[i]; if (!it) return;
+  if (!fromMap) map.flyTo([it.p.lat, it.p.lng], Math.max(map.getZoom(), 14), { duration: 0.6 });
+  markers[i] && markers[i].openPopup();
+  const card = $("card-" + i);
+  if (card && fromMap) card.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+
+function render(fit) {
+  document.querySelectorAll(".nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
+  const items = currentItems();
+  renderChips(); renderSummary(items); renderMap(items, fit); renderList(items);
+}
+
+$("locate").onclick = () => {
+  const btn = $("locate");
+  if (watchId != null) {
+    navigator.geolocation.clearWatch(watchId); watchId = null; me = null;
+    if (meMarker) { map.removeLayer(meMarker); meMarker = null; }
+    btn.setAttribute("aria-pressed", "false"); btn.textContent = "◎ 내 위치"; state.radius = 0; render(false); return;
+  }
+  if (!navigator.geolocation) { btn.textContent = "위치 사용 불가"; return; }
+  btn.textContent = "찾는 중…";
+  let first = true;
+  watchId = navigator.geolocation.watchPosition((pos) => {
+    me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    if (!meMarker) meMarker = L.marker([me.lat, me.lng], { icon: L.divIcon({ className: "", html: '<div class="me-dot"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), zIndexOffset: 2000 }).addTo(map);
+    else meMarker.setLatLng([me.lat, me.lng]);
+    btn.setAttribute("aria-pressed", "true"); btn.textContent = "◉ 내 위치 켜짐";
+    if (first) { first = false; render(false); map.flyTo([me.lat, me.lng], 14, { duration: 0.6 }); }
+    else if (state.tab === "food" || state.tab === "shop" || state.q.trim()) { const items = currentItems(); renderSummary(items); renderList(items); }
+  }, (err) => {
+    watchId = null; btn.setAttribute("aria-pressed", "false");
+    btn.textContent = err.code === 1 ? "위치 권한이 꺼져 있어요" : "위치를 못 찾았어요";
+    setTimeout(() => { btn.textContent = "◎ 내 위치"; }, 3000);
+  }, { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 });
+};
+
+let qTimer = null;
+$("q").addEventListener("input", (e) => {
+  $("qclear").hidden = !e.target.value; clearTimeout(qTimer);
+  qTimer = setTimeout(() => { state.q = e.target.value; state.on = null; render(true); }, 180);
+});
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.target.blur(); } if (e.key === "Escape") { $("qclear").click(); } });
+$("qclear").onclick = () => { $("q").value = ""; $("qclear").hidden = true; state.q = ""; state.qall = false; state.on = null; render(true); };
+document.querySelectorAll(".nav button").forEach(b => b.onclick = () => { state.tab = b.dataset.tab; state.on = null; save(); render(true); window.scrollTo({ top: 0 }); });
+render(true);
+</script>
+</body>
+</html>
