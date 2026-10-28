@@ -188,7 +188,7 @@ a:focus-visible, button:focus-visible, .card:focus-visible { outline: 2px solid 
   <div id="summary"></div>
   <ol class="list" id="list"></ol>
   <p class="foot">
-    '지도' 버튼을 누르면 네이버 지도 앱의 해당 장소로, '경로'·'도보' 버튼을 누르면 내 위치에서 그곳까지 자동차·도보 길찾기로 넘어가요.<br>
+    '지도' 버튼을 누르면 네이버 지도의 해당 장소로, '경로'·'도보' 버튼을 누르면 내 위치에서 그곳까지 자동차·도보 길찾기로 넘어가요.<br>
     '오늘 경로 지도 앱으로 열기'는 그날 들를 곳을 순서대로 경유지에 넣은 자동차 경로를 열어요(대중교통은 경유지가 지원되지 않아 출발·도착만 반영될 수 있어요). 휴대폰 브라우저에서 경유지가 잘리면 카드 사이 🚗 길찾기로 한 구간씩 가면 돼요.<br>
     위쪽 검색창에서 지금 탭 안을 찾아요('전체에서'로 넓히기). '내 위치'를 켜면 가까운 순으로 정렬되고 500m·1km·3km 반경으로 거를 수 있어요. 위치는 이 화면에서만 쓰이고 어디에도 저장·전송되지 않아요.<br>
     지도 © OpenStreetMap contributors · 도로 경로·시간 Valhalla/OSRM 추정(실제는 20~30% 더 걸림)<br>
@@ -233,7 +233,9 @@ function nwPt(p) {
 const nweb = (start, goal, vias, mode) => `https://map.naver.com/p/directions/${start ? nwPt(start) : "-"}/${nwPt(goal)}/${vias && vias.length ? vias.map(nwPt).join(":") : "-"}/${NWEB_MODE[mode] || "car"}`;
 // 하루 경로·구간: 첫 곳 출발 → 중간은 경유지(자동차만, 최대 5곳) → 마지막 도착
 function dirUrl(ps, mode = MODE) {
-  if (PROVIDER === "naver") return nweb(ps[0], ps[ps.length - 1], mode === "driving" ? ps.slice(1, -1).slice(0, 5) : [], mode);
+  // 경유지가 5곳을 넘으면 하루 전체에서 고르게 5곳(앞쪽만 들어가 뒤 일정이 빠지지 않게)
+  const mid = ps.slice(1, -1), vias = mid.length <= 5 ? mid : [0, 1, 2, 3, 4].map(i => mid[Math.round(i * (mid.length - 1) / 4)]);
+  if (PROVIDER === "naver") return nweb(ps[0], ps[ps.length - 1], mode === "driving" ? vias : [], mode);
   const q = new URLSearchParams({ api: "1", origin: ll(ps[0]), destination: ll(ps[ps.length - 1]), travelmode: mode });
   if (ps.length > 2) q.set("waypoints", ps.slice(1, -1).map(ll).join("|"));
   return "https://www.google.com/maps/dir/?" + q.toString();
@@ -241,16 +243,27 @@ function dirUrl(ps, mode = MODE) {
 // 내 위치 → 장소: 구글은 출발지를 비우면 현재 위치. 네이버 웹은 출발지가 비면 길찾기를 안 해서, 누를 때 위치를 받아 넣음(아래 클릭 처리)
 const routeUrl = (p, mode = MODE) => PROVIDER === "naver" ? nweb(null, p, null, mode)
   : "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", destination: ll(p), travelmode: mode }).toString();
+let lastPos = null;  // '내 위치'를 안 켜도 한 번 받은 위치는 기억
 document.addEventListener("click", (e) => {
   const a = e.target.closest('a[href^="https://map.naver.com/p/directions/-/"]'); if (!a) return;
   e.preventDefault();
-  const href = a.getAttribute("href"), w = window.open("about:blank", "_blank");  // 팝업 차단 피하려고 먼저 창을 엶
-  const go = (pos) => { const u = pos ? href.replace("/directions/-/", "/directions/" + nwPt({ lat: pos.lat, lng: pos.lng, name: "내 위치" }) + "/") : href;
-    if (w) w.location.href = u; else location.href = u; };
-  if (me) return go(me);
-  if (!navigator.geolocation) return go(null);
-  navigator.geolocation.getCurrentPosition((p) => go({ lat: p.coords.latitude, lng: p.coords.longitude }), () => go(null), { timeout: 8000, maximumAge: 60000 });
+  const href = a.getAttribute("href");
+  const withPos = (p) => p ? href.replace("/directions/-/", "/directions/" + nwPt({ lat: p.lat, lng: p.lng, name: "내 위치" }) + "/") : href;
+  const known = me || lastPos;
+  if (known) { window.open(withPos(known), "_blank"); return; }
+  if (!navigator.geolocation) { location.href = href; return; }
+  // 위치 허용 창은 이 화면에서 먼저 띄우고, 받은 뒤 같은 탭에서 엶(새 탭을 먼저 열면 휴대폰에서 위치 요청이 묻힘)
+  a.style.opacity = "0.5";
+  navigator.geolocation.getCurrentPosition(
+    (p) => { lastPos = { lat: p.coords.latitude, lng: p.coords.longitude }; a.style.opacity = ""; location.href = withPos(lastPos); },
+    () => { a.style.opacity = ""; location.href = href; }, { timeout: 8000, maximumAge: 60000 });
 });
+// '오늘 경로': 숙소 → … → 숙소처럼 출발·도착이 같으면 마지막 숙소를 빼고, 네이버는 대중교통이 경유지를 못 받아서 하루 동선은 자동차 경로로 보여줌
+function dayUrl(ps) {
+  let q = ps.slice();
+  if (q.length > 2 && q[0].id === q[q.length - 1].id) q = q.slice(0, -1);
+  return dirUrl(q, PROVIDER === "naver" ? "driving" : MODE);
+}
 const WALK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M9 20l3-6 3 3v4M12 14l-1-5 4 1 2 3M11 9l-3 2v3"/></svg>';
 const ROUTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>';
 
@@ -474,7 +487,7 @@ function renderSummary(items) {
         <div><small>운전</small><b>${h ? h + "시간 " : ""}${m}분</b></div>
         <div><small>거리</small><b>${d.km}km</b></div>
       </div>
-      <a class="route" href="${dirUrl(items.map(x => x.p))}" target="_blank" rel="noopener">${MAP_ICON}오늘 경로 네이버 지도 앱으로 열기</a>
+      <a class="route" href="${dayUrl(items.map(x => x.p))}" target="_blank" rel="noopener">${MAP_ICON}오늘 경로 네이버 지도으로 열기</a>
       <p class="tip">구간별 길찾기는 카드 사이 ${LEG_ICON} 버튼 · 식사는 '맛집' 탭에서</p>
     </section>`;
   } else if (state.tab === "food") {
