@@ -222,40 +222,34 @@ const PROVIDER = "naver";
 const ll = (p) => `${p.lat},${p.lng}`;
 const NMODE = { driving: "car", walking: "walk", transit: "public" };
 const nq = (o) => Object.entries(o).map(([k, v]) => k + "=" + encodeURIComponent(v)).join("&");
-const NAPP = location.hostname || "travel-map";
-// 휴대폰은 네이버 지도 앱(nmap://), PC·앱 없는 폰은 네이버 지도 웹 길찾기로 (웹 주소는 웹 메르카토르 좌표 · 공식 문서 없음)
-const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// 네이버 길찾기는 모든 기기에서 웹 주소(map.naver.com/p/directions) — 휴대폰은 네이버 모바일 '빠른길찾기'로 바로 열림(2026-10-28 확인).
+// 앱 링크(nmap://)는 앱이 없으면 안 열려서 쓰지 않음. 좌표는 웹 메르카토르 + 네이버 장소 ID(있으면)
 const NWEB_MODE = { driving: "car", walking: "walk", transit: "transit" };
-const NFALLBACK = new Map();  // 앱 링크 → 웹 링크 (앱이 안 열리면 웹으로)
 function nwPt(p) {
   const x = p.lng * 20037508.34 / 180, y = Math.log(Math.tan((90 + p.lat) * Math.PI / 360)) / (Math.PI / 180) * 20037508.34 / 180;
   const sid = ((p.url || "").match(/entry\/place\/(\d+)/) || [])[1] || "";
   return [x.toFixed(7), y.toFixed(7), encodeURIComponent(p.name), sid, sid ? "PLACE_POI" : "ADDRESS_POI"].join(",");
 }
 const nweb = (start, goal, vias, mode) => `https://map.naver.com/p/directions/${start ? nwPt(start) : "-"}/${nwPt(goal)}/${vias && vias.length ? vias.map(nwPt).join(":") : "-"}/${NWEB_MODE[mode] || "car"}`;
-const nlink = (app, web) => { if (!IS_MOBILE) return web; NFALLBACK.set(app, web); return app; };
-// 하루 경로: 첫 곳 출발 → 중간은 경유지 → 마지막 도착 (네이버 자동차는 경유지 최대 5곳)
-function dirUrl(ps) {
-  if (PROVIDER === "naver") {
-    const o = { slat: ps[0].lat, slng: ps[0].lng, sname: ps[0].name, dlat: ps[ps.length - 1].lat, dlng: ps[ps.length - 1].lng, dname: ps[ps.length - 1].name };
-    const vias = MODE !== "transit" ? ps.slice(1, -1).slice(0, 5) : [];
-    vias.forEach((p, i) => Object.assign(o, { [`v${i + 1}lat`]: p.lat, [`v${i + 1}lng`]: p.lng, [`v${i + 1}name`]: p.name }));
-    return nlink(`nmap://route/${NMODE[MODE] || "car"}?` + nq({ ...o, appname: NAPP }), nweb(ps[0], ps[ps.length - 1], vias, MODE));
-  }
-  const q = new URLSearchParams({ api: "1", origin: ll(ps[0]), destination: ll(ps[ps.length - 1]), travelmode: MODE });
+// 하루 경로·구간: 첫 곳 출발 → 중간은 경유지(자동차만, 최대 5곳) → 마지막 도착
+function dirUrl(ps, mode = MODE) {
+  if (PROVIDER === "naver") return nweb(ps[0], ps[ps.length - 1], mode === "driving" ? ps.slice(1, -1).slice(0, 5) : [], mode);
+  const q = new URLSearchParams({ api: "1", origin: ll(ps[0]), destination: ll(ps[ps.length - 1]), travelmode: mode });
   if (ps.length > 2) q.set("waypoints", ps.slice(1, -1).map(ll).join("|"));
   return "https://www.google.com/maps/dir/?" + q.toString();
 }
-// 내 위치 → 장소 길찾기: 출발지를 비우면 지도 앱이 현재 위치를 출발지로 씀 (웹은 출발지 입력 칸이 비어 있음)
-const routeUrl = (p, mode = MODE) => PROVIDER === "naver"
-  ? nlink(`nmap://route/${NMODE[mode] || "car"}?` + nq({ dlat: p.lat, dlng: p.lng, dname: p.name, appname: NAPP }), nweb(null, p, null, mode))
+// 내 위치 → 장소: 구글은 출발지를 비우면 현재 위치. 네이버 웹은 출발지가 비면 길찾기를 안 해서, 누를 때 위치를 받아 넣음(아래 클릭 처리)
+const routeUrl = (p, mode = MODE) => PROVIDER === "naver" ? nweb(null, p, null, mode)
   : "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", destination: ll(p), travelmode: mode }).toString();
-// 휴대폰: 앱 링크를 누르면 앱을 열고, 1.5초 안에 화면이 안 바뀌면(앱 없음) 웹 길찾기로
 document.addEventListener("click", (e) => {
-  const a = e.target.closest('a[href^="nmap:"]'); if (!a) return;
-  e.preventDefault(); const web = NFALLBACK.get(a.getAttribute("href"));
-  location.href = a.getAttribute("href");
-  if (web) setTimeout(() => { if (!document.hidden) location.href = web; }, 1500);
+  const a = e.target.closest('a[href^="https://map.naver.com/p/directions/-/"]'); if (!a) return;
+  e.preventDefault();
+  const href = a.getAttribute("href"), w = window.open("about:blank", "_blank");  // 팝업 차단 피하려고 먼저 창을 엶
+  const go = (pos) => { const u = pos ? href.replace("/directions/-/", "/directions/" + nwPt({ lat: pos.lat, lng: pos.lng, name: "내 위치" }) + "/") : href;
+    if (w) w.location.href = u; else location.href = u; };
+  if (me) return go(me);
+  if (!navigator.geolocation) return go(null);
+  navigator.geolocation.getCurrentPosition((p) => go({ lat: p.coords.latitude, lng: p.coords.longitude }), () => go(null), { timeout: 8000, maximumAge: 60000 });
 });
 const WALK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M9 20l3-6 3 3v4M12 14l-1-5 4 1 2 3M11 9l-3 2v3"/></svg>';
 const ROUTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>';
@@ -433,7 +427,7 @@ function renderList(items) {
     const p = it.p;
     if (state.tab === "day" && !state.q.trim() && it.leg) {
       const leg = document.createElement("li"); leg.className = "leg";
-      leg.innerHTML = `<a href="${dirUrl([items[i - 1].p, p])}" target="_blank" rel="noopener">${LEG_ICON} 약 ${it.leg.min}분 · ${it.leg.km}km<b>길찾기 →</b></a>`; ol.appendChild(leg);
+      leg.innerHTML = `<a href="${dirUrl([items[i - 1].p, p], it.leg.km < 1.2 ? "walking" : MODE)}" target="_blank" rel="noopener">${LEG_ICON} 약 ${it.leg.min}분 · ${it.leg.km}km<b>길찾기 →</b></a>`; ol.appendChild(leg);
     }
     const li = document.createElement("li");
     li.className = "card" + (it.emoji ? " food" : "") + (state.on === i ? " on" : ""); li.id = "card-" + i;
