@@ -129,6 +129,7 @@ a.go svg { width: 20px; height: 20px; }
 /* 지도 + 경로 버튼 세로 묶음 */
 .acts { align-self: start; display: grid; gap: 6px; }
 a.go.route { color: #fff; background: var(--brand); }
+a.go.walk { color: var(--brand-strong); background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--brand); }
 a:focus-visible, button:focus-visible, .card:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 /* 일정 탭: 카드 사이 이동 구간 */
 .leg { display: flex; align-items: center; gap: 8px; margin: -4px 0; padding-left: 29px; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -187,7 +188,7 @@ a:focus-visible, button:focus-visible, .card:focus-visible { outline: 2px solid 
   <div id="summary"></div>
   <ol class="list" id="list"></ol>
   <p class="foot">
-    '지도' 버튼을 누르면 구글맵 앱의 해당 장소로, '경로' 버튼을 누르면 내 위치에서 그곳까지 자동차 길찾기로 넘어가요.<br>
+    '지도' 버튼을 누르면 구글맵 앱의 해당 장소로, '경로'·'도보' 버튼을 누르면 내 위치에서 그곳까지 자동차·도보 길찾기로 넘어가요.<br>
     '오늘 경로 구글맵으로 열기'는 그날 들를 곳을 순서대로 경유지에 넣은 운전 경로를 열어요. 휴대폰 브라우저에서 경유지가 잘리면 카드 사이 🚗 길찾기로 한 구간씩 가면 돼요.<br>
     위쪽 검색창에 '라멘', '온천', '산리오', '무료 주차'처럼 입력하면 지금 탭에서 찾아줘요('전체에서'로 넓히기). '내 위치'를 켜면 가까운 순으로 정렬되고 500m·1km·3km 반경으로 거를 수 있어요. 위치는 이 화면에서만 쓰이고 어디에도 저장·전송되지 않아요.<br>
     지도 © OpenStreetMap contributors · 도로 경로·시간 OSRM·Valhalla 추정(실제는 20~30% 더 걸림) · 통행료를 아끼려고 고속도로가 20분 이상 빠르지 않으면 국도로 짰어요(고속도로는 4일차·7일차만, 휴게소 체험 겸) · 2일차 오후는 페리 대신 육로로 계산돼 실제보다 길게 나와요.<br>
@@ -223,7 +224,8 @@ function dirUrl(ps) {
   return "https://www.google.com/maps/dir/?" + q.toString();
 }
 // 내 위치 → 장소 길찾기: origin을 비우면 구글맵이 현재 위치를 출발지로 씀
-const routeUrl = (p) => "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", destination: ll(p), travelmode: "driving" }).toString();
+const routeUrl = (p, mode = "driving") => "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", destination: ll(p), travelmode: mode }).toString();
+const WALK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M9 20l3-6 3 3v4M12 14l-1-5 4 1 2 3M11 9l-3 2v3"/></svg>';
 const ROUTE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>';
 
 let state = { tab: "day", day: 0, area: "전체", tag: "전체", zone: "전체", on: null, q: "", qall: false, radius: 0 };
@@ -349,7 +351,7 @@ function renderChips() {
 }
 
 function popupHtml(p) {
-  return `<b>${p.emoji ? p.emoji + " " : ""}${p.name}</b>${p.genre ? "<br>" + p.genre : ""}${p.menu ? "<br>" + p.menu : ""}${p.park ? "<br>🅿 " + p.park : ""}<br><a href="${p.url}" target="_blank" rel="noopener">구글맵에서 열기</a> · <a href="${routeUrl(p)}" target="_blank" rel="noopener">내 위치에서 경로</a>`;
+  return `<b>${p.emoji ? p.emoji + " " : ""}${p.name}</b>${p.genre ? "<br>" + p.genre : ""}${p.menu ? "<br>" + p.menu : ""}${p.park ? "<br>🅿 " + p.park : ""}<br><a href="${p.url}" target="_blank" rel="noopener">구글맵에서 열기</a> · <a href="${routeUrl(p)}" target="_blank" rel="noopener">🚗 경로</a> · <a href="${routeUrl(p, "walking")}" target="_blank" rel="noopener">🚶 도보</a>`;
 }
 
 function renderMap(items, fit) {
@@ -421,6 +423,7 @@ function renderList(items) {
       <div class="acts">
         <a class="go" href="${p.url}" target="_blank" rel="noopener" aria-label="${p.name} 구글맵">${MAP_ICON}지도</a>
         <a class="go route" href="${routeUrl(p)}" target="_blank" rel="noopener" aria-label="내 위치에서 ${p.name}까지 경로">${ROUTE_ICON}경로</a>
+        <a class="go walk" href="${routeUrl(p, "walking")}" target="_blank" rel="noopener" aria-label="내 위치에서 ${p.name}까지 도보 경로">${WALK_ICON}도보</a>
       </div>`;
     li.addEventListener("click", (e) => { if (!e.target.closest("a")) select(i, false); });
     ol.appendChild(li);
